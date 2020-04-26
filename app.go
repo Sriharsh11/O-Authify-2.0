@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -26,13 +25,18 @@ type login struct {
 	PASSWORD string
 }
 
+var Db *gorm.DB
+var server_port string
+var router *gin.Engine
+
+//load environment variables
 func init() {
 	if err := godotenv.Load(); err != nil {
 		log.Print("No .env file found")
 	}
 }
 
-//hash password
+//hash password before storing it in the database
 func HashPassword(password string) (string, error) {
 	hashed_password_in_bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
 	return string(hashed_password_in_bytes), err
@@ -44,6 +48,72 @@ func CheckPasswordHash(password, hash string) bool {
 	return err == nil
 }
 
+//add new users in database
+func AddUsers(c *gin.Context) {
+	name := c.PostForm("NAME")
+	email := c.PostForm("EMAIL")
+	password := c.PostForm("PASSWORD")
+	hashed_password, err := HashPassword(password) //store hashed password in database
+	if err != nil {
+		panic(err)
+	}
+	if name != "" && email != "" && hashed_password != "" {
+		newUser := Users3{NAME: name, EMAIL: email, PASSWORD: hashed_password}
+		Db.NewRecord(newUser)
+		Db.Create(&newUser)
+		c.String(200, "Added new user successfully")
+	} else {
+		panic("failed to add new user")
+	}
+}
+
+//authenticate existing users and return access tokens to authenticated users
+func AuthenticateUsers(c *gin.Context) {
+	email := c.PostForm("EMAIL")
+	password := c.PostForm("PASSWORD")
+	var password_DB_list login
+	var email_DB_list login
+	if email != "" && password != "" {
+		//fmt.Println(DB.Table("users3").Select("EMAIL").Where("EMAIL = ?", email).Scan(&email_DB_list))
+		Db.Table("users3").Select("EMAIL").Where("EMAIL = ?", email).Scan(&email_DB_list)
+		//fmt.Println(email_DB_list)
+		email_DB := email_DB_list.EMAIL
+		if email_DB != "" {
+			Db.Table("users3").Select("PASSWORD").Where("EMAIL = ?", email).Scan(&password_DB_list)
+			//fmt.Println(password_DB_list)
+			password_DB := password_DB_list.PASSWORD
+			if CheckPasswordHash(password, password_DB) {
+				payload := `{"security":"OAuth 2.0"}`
+				sharedKey := "Linux is Awesome"
+				token, err := jose.Sign(payload, jose.HS256, sharedKey) //using HS256 algorithm for creating JWT
+				if err == nil {
+					c.JSON(http.StatusOK, token)
+				} else {
+					panic("failed to generate token")
+				}
+			} else {
+				panic("invalid credentials")
+			}
+		} else {
+			panic("user does not exist")
+		}
+	} else {
+		panic("fields are empty")
+	}
+}
+
+//give access only to authorised users which have an access token
+func HomeAccess(c *gin.Context) {
+	token := c.Request.Header.Get("token")
+	sharedKey := "Linux is Awesome"
+	payload, _, err := jose.Decode(token, sharedKey)
+	if err == nil {
+		c.String(http.StatusOK, "Access Granted") //Granting access only to authorised users
+	} else {
+		c.AbortWithStatus(401)
+	}
+}
+
 func main() {
 
 	//get all the environment variables
@@ -52,86 +122,25 @@ func main() {
 	db_user, user_exists := os.LookupEnv("DB_USER")
 	db_name, name_exists := os.LookupEnv("DB_NAME")
 	db_password, password_exists := os.LookupEnv("DB_PASSWORD")
-	server_port, server_port_exists := os.LookupEnv("SERVER_PORT")
-	//sharedKey, key_exists := os.LookupEnv("SHARED_KEY")
-	//connect to database
+	var server_port_exists bool
+	server_port, server_port_exists = os.LookupEnv("SERVER_PORT")
+
 	if host_exists && port_exists && user_exists && name_exists && password_exists && server_port_exists {
-		db, err := gorm.Open("postgres", "host="+db_host+" port="+db_port+" user="+db_user+" dbname="+db_name+" password="+db_password)
+		var err error
+		Db, err = gorm.Open("postgres", "host="+db_host+" port="+db_port+" user="+db_user+" dbname="+db_name+" password="+db_password)
 		if err != nil {
 			panic("failed to connect to database")
 		}
-		defer db.Close()
+		defer Db.Close()
 
-		db.AutoMigrate(&Users3{})
+		Db.AutoMigrate(&Users3{})
 
 		router := gin.Default()
 
-		//add new user to table Users3
-		router.POST("/addUser", func(c *gin.Context) {
-			name := c.PostForm("NAME")
-			email := c.PostForm("EMAIL")
-			password := c.PostForm("PASSWORD")
-			hashed_password, err := HashPassword(password) //store hashed password in database
-			if err != nil {
-				panic(err)
-			}
-			if name != "" && email != "" && hashed_password != "" {
-				newUser := Users3{NAME: name, EMAIL: email, PASSWORD: hashed_password}
-				db.NewRecord(newUser)
-				db.Create(&newUser)
-			} else {
-				panic("failed to add new user")
-			}
-		})
-
-		//sharedKey := []byte{97, 48, 97, 50, 97, 98, 100, 56, 45, 54, 49, 54, 50, 45, 52, 49, 99, 51, 45, 56, 51, 100, 54, 45, 49, 99, 102, 53, 53, 57, 98, 52, 54, 97, 102, 99}
-		sharedKey := "Linux is Awesome"
-		//return access tokens to verified users
-		router.POST("/oauth", func(c *gin.Context) {
-			email := c.PostForm("EMAIL")
-			password := c.PostForm("PASSWORD")
-			var password_db_list login
-			var email_db_list login
-			if email != "" && password != "" {
-				//fmt.Println(db.Table("users3").Select("EMAIL").Where("EMAIL = ?", email).Scan(&email_db_list))
-				db.Table("users3").Select("EMAIL").Where("EMAIL = ?", email).Scan(&email_db_list)
-				//fmt.Println(email_db_list)
-				email_db := email_db_list.EMAIL
-				if email_db != "" {
-					db.Table("users3").Select("PASSWORD").Where("EMAIL = ?", email).Scan(&password_db_list)
-					//fmt.Println(password_db_list)
-					password_db := password_db_list.PASSWORD
-					if CheckPasswordHash(password, password_db) {
-						payload := `{"security":"OAuth 2.0"}`
-						token, err := jose.Sign(payload, jose.HS256, sharedKey) //using HS256 algorithm for creating JWT
-						if err == nil {
-							c.JSON(http.StatusOK, token)
-						} else {
-							panic("failed to generate token")
-						}
-					} else {
-						panic("invalid credentials")
-					}
-				} else {
-					panic("user does not exist")
-				}
-			} else {
-				panic("fields are empty")
-			}
-		})
-
-		router.GET("/home", func(c *gin.Context) {
-			token := c.Request.Header.Get("token")
-			payload, _, err := jose.Decode(token, sharedKey)
-			if err == nil {
-				c.JSON(http.StatusOK, "Access Granted for "+payload) //Granting access only to authorised users
-			} else {
-				c.AbortWithStatus(401)
-			}
-		})
+		router.POST("/addUser", AddUsers)
+		router.POST("/oauth", AuthenticateUsers)
+		router.GET("/home", HomeAccess)
 
 		router.Run(":" + server_port)
-	} else {
-		fmt.Println("env variable(s) do not exist(s)")
 	}
 }
