@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -25,11 +26,10 @@ type login struct {
 	PASSWORD string
 }
 
+//global variables used only because almost all functions need them
 var Db *gorm.DB
 var server_port string
 var router *gin.Engine
-var password_DB_list login
-var email_DB_list login
 
 //load environment variables
 func init() {
@@ -54,12 +54,13 @@ func CheckPasswordHash(password, hash string) bool {
 func EnterIntoDB(name, email, password string) bool {
 	hashed_password, err := HashPassword(password) //store hashed password in database
 	if err != nil {
-		panic(err)
+		return false
+	} else {
+		newUser := Users3{NAME: name, EMAIL: email, PASSWORD: hashed_password}
+		Db.NewRecord(newUser)
+		Db.Create(&newUser)
+		return true
 	}
-	newUser := Users3{NAME: name, EMAIL: email, PASSWORD: hashed_password}
-	Db.NewRecord(newUser)
-	Db.Create(&newUser)
-	return true
 }
 
 //generates access token
@@ -67,11 +68,13 @@ func GenerateAccessToken() (string, error) {
 	payload := `{"security":"OAuth 2.0"}`
 	sharedKey := []byte{99, 75, 63}
 	token, err := jose.Sign(payload, jose.HS256, sharedKey) //using HS256 algorithm for creating JWT
-	return token, err
+	return token, fmt.Errorf("Failed to generate token: %w", err)
 }
 
 //checks the entered user against existing users in database
 func CheckForExistingUser(email, password string) bool {
+	var password_DB_list login
+	var email_DB_list login
 	Db.Table("users3").Select("EMAIL").Where("EMAIL = ?", email).Scan(&email_DB_list)
 	email_DB := email_DB_list.EMAIL
 	if email_DB != "" {
@@ -93,7 +96,7 @@ func AddUsers(c *gin.Context) {
 			c.String(200, "Added new user successfully")
 		}
 	} else {
-		panic("failed to add new user")
+		panic("Failed to add user")
 	}
 }
 
@@ -107,7 +110,7 @@ func AuthenticateUsers(c *gin.Context) {
 			if err == nil {
 				c.JSON(http.StatusOK, token)
 			} else {
-				panic("failed to generate token")
+				panic(err)
 			}
 		} else {
 			panic("user does not exist")
