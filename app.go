@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -58,7 +57,6 @@ func EnterIntoDB(name, email, password string) bool {
 		panic(err)
 	}
 	newUser := Users3{NAME: name, EMAIL: email, PASSWORD: hashed_password}
-	//Db.Exec("INSERT INTO USERS3 (NAME, EMAIL, PASSWORD) VALUES (" + name + "," + email + "," + hashed_password + ")")
 	Db.NewRecord(newUser)
 	Db.Create(&newUser)
 	return true
@@ -69,8 +67,6 @@ func GenerateAccessToken() (string, error) {
 	payload := `{"security":"OAuth 2.0"}`
 	sharedKey := []byte{99, 75, 63}
 	token, err := jose.Sign(payload, jose.HS256, sharedKey) //using HS256 algorithm for creating JWT
-	fmt.Println(token)
-	fmt.Println(err)
 	return token, err
 }
 
