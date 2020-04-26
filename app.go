@@ -1,6 +1,10 @@
 package main
 
 import (
+	"fmt"
+	"net/http"
+
+	jose "github.com/dvsekhvalnov/jose2go"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/postgres"
@@ -14,10 +18,21 @@ type Users3 struct {
 	PASSWORD string
 }
 
+type login struct {
+	EMAIL    string
+	PASSWORD string
+}
+
 //hash password
 func HashPassword(password string) (string, error) {
 	hashed_password_in_bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
 	return string(hashed_password_in_bytes), err
+}
+
+//check passowrd against the hash stored in the database
+func CheckPasswordHash(password, hash string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+	return err == nil
 }
 
 func main() {
@@ -50,15 +65,41 @@ func main() {
 			panic("failed to add new user")
 		}
 	})
-	router.Run(":3000")
 
-	// router := gin.Default()
-	// router.POST("/test", func(c *gin.Context) {
-	// 	email := c.PostForm("email")
-	// 	password := c.PostForm("password")
-	// 	c.JSON(200, gin.H{
-	// 		"message": email + " " + password,
-	// 	})
-	// })
-	// router.Run(":3000")
+	//return access tokens to verified users
+	router.POST("/oauth", func(c *gin.Context) {
+		email := c.PostForm("EMAIL")
+		password := c.PostForm("PASSWORD")
+		var password_db_list login
+		var email_db_list login
+		if email != "" && password != "" {
+			fmt.Println(db.Table("users3").Select("EMAIL").Where("EMAIL = ?", email).Scan(&email_db_list))
+			db.Table("users3").Select("EMAIL").Where("EMAIL = ?", email).Scan(&email_db_list)
+			fmt.Println(email_db_list)
+			email_db := email_db_list.EMAIL
+			if email_db != "" {
+				db.Table("users3").Select("PASSWORD").Where("EMAIL = ?", email).Scan(&password_db_list)
+				fmt.Println(password_db_list)
+				password_db := password_db_list.PASSWORD
+				if CheckPasswordHash(password, password_db) {
+					payload := `{"security":"OAuth 2.0"}`
+					key := []byte{97, 48, 97, 50, 97, 98, 100, 56, 45, 54, 49, 54, 50, 45, 52, 49, 99, 51, 45, 56, 51, 100, 54, 45, 49, 99, 102, 53, 53, 57, 98, 52, 54, 97, 102, 99}
+					token, err := jose.Sign(payload, jose.HS256, key)
+					if err == nil {
+						c.JSON(http.StatusOK, token)
+					} else {
+						panic("failed to generate token")
+					}
+				} else {
+					panic("invalid credentials")
+				}
+			} else {
+				panic("user does not exist")
+			}
+		} else {
+			panic("fields are empty")
+		}
+	})
+
+	router.Run(":3000")
 }
