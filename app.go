@@ -74,13 +74,10 @@ func AuthenticateUsers(c *gin.Context) {
 	var password_DB_list login
 	var email_DB_list login
 	if email != "" && password != "" {
-		//fmt.Println(DB.Table("users3").Select("EMAIL").Where("EMAIL = ?", email).Scan(&email_DB_list))
 		Db.Table("users3").Select("EMAIL").Where("EMAIL = ?", email).Scan(&email_DB_list)
-		//fmt.Println(email_DB_list)
 		email_DB := email_DB_list.EMAIL
 		if email_DB != "" {
 			Db.Table("users3").Select("PASSWORD").Where("EMAIL = ?", email).Scan(&password_DB_list)
-			//fmt.Println(password_DB_list)
 			password_DB := password_DB_list.PASSWORD
 			if CheckPasswordHash(password, password_DB) {
 				payload := `{"security":"OAuth 2.0"}`
