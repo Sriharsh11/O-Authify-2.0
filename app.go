@@ -84,7 +84,7 @@ func main() {
 				if CheckPasswordHash(password, password_db) {
 					payload := `{"security":"OAuth 2.0"}`
 					key := []byte{97, 48, 97, 50, 97, 98, 100, 56, 45, 54, 49, 54, 50, 45, 52, 49, 99, 51, 45, 56, 51, 100, 54, 45, 49, 99, 102, 53, 53, 57, 98, 52, 54, 97, 102, 99}
-					token, err := jose.Sign(payload, jose.HS256, key)
+					token, err := jose.Sign(payload, jose.HS256, key) //using HS256 algorithm for creating JWT
 					if err == nil {
 						c.JSON(http.StatusOK, token)
 					} else {
@@ -98,6 +98,17 @@ func main() {
 			}
 		} else {
 			panic("fields are empty")
+		}
+	})
+
+	router.GET("/home", func(c *gin.Context) {
+		token := c.Request.Header.Get("token")
+		sharedKey := []byte{97, 48, 97, 50, 97, 98, 100, 56, 45, 54, 49, 54, 50, 45, 52, 49, 99, 51, 45, 56, 51, 100, 54, 45, 49, 99, 102, 53, 53, 57, 98, 52, 54, 97, 102, 99}
+		payload, _, err := jose.Decode(token, sharedKey)
+		if err == nil {
+			c.JSON(http.StatusOK, "Access Granted for "+payload) //Granting access only to authorised users
+		} else {
+			c.AbortWithStatus(401)
 		}
 	})
 
