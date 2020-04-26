@@ -17,11 +17,13 @@ OAuth 2.0 in GoLang
 - **ORM Used** - GORM
 - **HTTP Framework Used** - Gin (gin-gonic/gin)
 
-## Code
+<!-- ## Code
 
-...
+... -->
 
 ## Functions Used
+
+...
 
 - **HashPassword** - _ hashes password using bcrypt package before storing in the database _
 
@@ -32,7 +34,8 @@ OAuth 2.0 in GoLang
 - **AuthenticateUsers** - _ handler for /oauth which posts email and password as multipart/form-data. The data is checked against existing entries in database using the email. If an entry exists, the function generates an access token(JWT) using HS256 algorithm. According to this algorithm a shared key is sent along with the access token which known by both the user and the authenticator. _
 
 - **HomeAccess** - _ handler for /home which is accessible only if the requesting user sends the proper access token as a request header. This token is then decoded and verified using the shared key and the user is granted access if the match is successfull _
-  ...
+
+...
 
 <!-- ### Prerequisites
 
