@@ -28,6 +28,8 @@ type login struct {
 var Db *gorm.DB
 var server_port string
 var router *gin.Engine
+var password_DB_list login
+var email_DB_list login
 
 //load environment variables
 func init() {
@@ -48,20 +50,57 @@ func CheckPasswordHash(password, hash string) bool {
 	return err == nil
 }
 
+//enter users in the database
+func EnterIntoDB(name, email, password string) bool {
+	hashed_password, err := HashPassword(password) //store hashed password in database
+	if err != nil {
+		panic(err)
+	}
+	newUser := Users3{NAME: name, EMAIL: email, PASSWORD: hashed_password}
+	//Db.Exec("INSERT INTO USERS3 (NAME, EMAIL, PASSWORD) VALUES (" + name + "," + email + "," + hashed_password + ")")
+	Db.NewRecord(newUser)
+	Db.Create(&newUser)
+	return true
+}
+
+//generates access token
+func GenerateAccessToken() {
+	payload := `{"security":"OAuth 2.0"}`
+	sharedKey := "Linux is Awesome"
+	token, err := jose.Sign(payload, jose.HS256, sharedKey) //using HS256 algorithm for creating JWT
+	if err == nil {
+		c.JSON(http.StatusOK, token)
+	} else {
+		panic("failed to generate token")
+	}
+}
+
+//checks the entered user against existing users in database
+func CheckForExistingUser(email, password string) {
+	Db.Table("users3").Select("EMAIL").Where("EMAIL = ?", email).Scan(&email_DB_list)
+	email_DB := email_DB_list.EMAIL
+	if email_DB != "" {
+		Db.Table("users3").Select("PASSWORD").Where("EMAIL = ?", email).Scan(&password_DB_list)
+		password_DB := password_DB_list.PASSWORD
+		if CheckPasswordHash(password, password_DB) {
+			GenerateAccessToken()
+		} else {
+			panic("invalid credentials")
+		}
+	} else {
+		panic("user does not exist")
+	}
+}
+
 //add new users in database
 func AddUsers(c *gin.Context) {
 	name := c.PostForm("NAME")
 	email := c.PostForm("EMAIL")
 	password := c.PostForm("PASSWORD")
-	hashed_password, err := HashPassword(password) //store hashed password in database
-	if err != nil {
-		panic(err)
-	}
-	if name != "" && email != "" && hashed_password != "" {
-		newUser := Users3{NAME: name, EMAIL: email, PASSWORD: hashed_password}
-		Db.NewRecord(newUser)
-		Db.Create(&newUser)
-		c.String(200, "Added new user successfully")
+	if name != "" && email != "" && password != "" {
+		if EnterIntoDB(name, email, password) {
+			c.String(200, "Added new user successfully")
+		}
 	} else {
 		panic("failed to add new user")
 	}
@@ -71,29 +110,8 @@ func AddUsers(c *gin.Context) {
 func AuthenticateUsers(c *gin.Context) {
 	email := c.PostForm("EMAIL")
 	password := c.PostForm("PASSWORD")
-	var password_DB_list login
-	var email_DB_list login
 	if email != "" && password != "" {
-		Db.Table("users3").Select("EMAIL").Where("EMAIL = ?", email).Scan(&email_DB_list)
-		email_DB := email_DB_list.EMAIL
-		if email_DB != "" {
-			Db.Table("users3").Select("PASSWORD").Where("EMAIL = ?", email).Scan(&password_DB_list)
-			password_DB := password_DB_list.PASSWORD
-			if CheckPasswordHash(password, password_DB) {
-				payload := `{"security":"OAuth 2.0"}`
-				sharedKey := "Linux is Awesome"
-				token, err := jose.Sign(payload, jose.HS256, sharedKey) //using HS256 algorithm for creating JWT
-				if err == nil {
-					c.JSON(http.StatusOK, token)
-				} else {
-					panic("failed to generate token")
-				}
-			} else {
-				panic("invalid credentials")
-			}
-		} else {
-			panic("user does not exist")
-		}
+		CheckForExistingUser(email, password)
 	} else {
 		panic("fields are empty")
 	}
@@ -105,14 +123,13 @@ func HomeAccess(c *gin.Context) {
 	sharedKey := "Linux is Awesome"
 	payload, _, err := jose.Decode(token, sharedKey)
 	if err == nil {
-		c.String(http.StatusOK, "Access Granted") //Granting access only to authorised users
+		c.String(http.StatusOK, "Access Granted "+payload) //Granting access only to authorised users
 	} else {
 		c.AbortWithStatus(401)
 	}
 }
 
 func main() {
-
 	//get all the environment variables
 	db_host, host_exists := os.LookupEnv("DB_HOST")
 	db_port, port_exists := os.LookupEnv("DB_PORT")
