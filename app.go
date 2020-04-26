@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -64,31 +65,25 @@ func EnterIntoDB(name, email, password string) bool {
 }
 
 //generates access token
-func GenerateAccessToken() {
+func GenerateAccessToken() (string, error) {
 	payload := `{"security":"OAuth 2.0"}`
-	sharedKey := "Linux is Awesome"
+	sharedKey := []byte{99, 75, 63}
 	token, err := jose.Sign(payload, jose.HS256, sharedKey) //using HS256 algorithm for creating JWT
-	if err == nil {
-		c.JSON(http.StatusOK, token)
-	} else {
-		panic("failed to generate token")
-	}
+	fmt.Println(token)
+	fmt.Println(err)
+	return token, err
 }
 
 //checks the entered user against existing users in database
-func CheckForExistingUser(email, password string) {
+func CheckForExistingUser(email, password string) bool {
 	Db.Table("users3").Select("EMAIL").Where("EMAIL = ?", email).Scan(&email_DB_list)
 	email_DB := email_DB_list.EMAIL
 	if email_DB != "" {
 		Db.Table("users3").Select("PASSWORD").Where("EMAIL = ?", email).Scan(&password_DB_list)
 		password_DB := password_DB_list.PASSWORD
-		if CheckPasswordHash(password, password_DB) {
-			GenerateAccessToken()
-		} else {
-			panic("invalid credentials")
-		}
+		return CheckPasswordHash(password, password_DB)
 	} else {
-		panic("user does not exist")
+		return false
 	}
 }
 
@@ -111,7 +106,16 @@ func AuthenticateUsers(c *gin.Context) {
 	email := c.PostForm("EMAIL")
 	password := c.PostForm("PASSWORD")
 	if email != "" && password != "" {
-		CheckForExistingUser(email, password)
+		if CheckForExistingUser(email, password) {
+			token, err := GenerateAccessToken()
+			if err == nil {
+				c.JSON(http.StatusOK, token)
+			} else {
+				panic("failed to generate token")
+			}
+		} else {
+			panic("user does not exist")
+		}
 	} else {
 		panic("fields are empty")
 	}
@@ -120,7 +124,7 @@ func AuthenticateUsers(c *gin.Context) {
 //give access only to authorised users which have an access token
 func HomeAccess(c *gin.Context) {
 	token := c.Request.Header.Get("token")
-	sharedKey := "Linux is Awesome"
+	sharedKey := []byte{99, 75, 63}
 	payload, _, err := jose.Decode(token, sharedKey)
 	if err == nil {
 		c.String(http.StatusOK, "Access Granted "+payload) //Granting access only to authorised users
