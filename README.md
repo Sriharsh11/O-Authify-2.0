@@ -21,15 +21,15 @@ OAuth 2.0 in GoLang
 
 ... -->
 
-## Functions Used
+## Functions Used </>
 
 - **HashPassword** - Hashes password using bcrypt package before storing in the database.
 
-- **CheckPasswordHash** - Checks a plain-text password against a hash and return true if the match is successfull.
+- **CheckPasswordHash** - Checks a plain-text password against a hash and returns true if the match is successfull.
 
 - **AddUsers** - Handler for /addUser which posts name, email, password as multipart/form-data. The form detail is stored as a new entry in the database if none of the fields(name, email, password) are empty.
 
-- **AuthenticateUsers** - Handler for /oauth which posts email and password as multipart/form-data. The data is checked against existing entries in database using the email. If an entry exists, the function generates an access token(JWT) using HS256 algorithm. According to this algorithm a shared key is sent along with the access token which known by both the user and the authenticator.
+- **AuthenticateUsers** - Handler for /oauth which posts email and password as multipart/form-data. The data is checked against existing entries in database using the email. If an entry exists, the function generates an access token(JWT) using HS256 algorithm. According to this algorithm a shared key is sent along with the access token which is known by both the user and the authenticator.
 
 - **HomeAccess** - Handler for /home which is accessible only if the requesting user sends the proper access token as a request header. This token is then decoded and verified using the shared key and the user is granted access if the match is successfull.
 
