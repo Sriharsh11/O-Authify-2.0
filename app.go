@@ -1,12 +1,13 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"strings"
+	"time"
 
-	jose "github.com/dvsekhvalnov/jose2go"
+	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/postgres"
@@ -30,6 +31,7 @@ type login struct {
 var Db *gorm.DB
 var server_port string
 var router *gin.Engine
+var AtJwtKey []byte
 
 //load environment variables
 func init() {
@@ -64,11 +66,19 @@ func EnterIntoDB(name, email, password string) bool {
 }
 
 //generates access token
-func GenerateAccessToken() (string, error) {
-	payload := `{"security":"OAuth 2.0"}`
-	sharedKey := []byte{99, 75, 63}
-	token, err := jose.Sign(payload, jose.HS256, sharedKey) //using HS256 algorithm for creating JWT
-	return token, fmt.Errorf("Failed to generate token: %w", err)
+func GenerateAccessToken(email, password string) (string, error) {
+	//expiration time is 60 minutes
+	expirationTimeAccessToken := time.Now().Add(60 * time.Minute).Unix()
+	token := jwt.New(jwt.SigningMethodHS256)
+	claims := token.Claims.(jwt.MapClaims)
+	claims["email"] = email
+	claims["exp"] = expirationTimeAccessToken
+	claims["sub"] = password
+	tokenString, err := token.SignedString(AtJwtKey)
+	if err != nil {
+		return "", err
+	}
+	return tokenString, nil
 }
 
 //checks the entered user against existing users in database
@@ -106,7 +116,7 @@ func AuthenticateUsers(c *gin.Context) {
 	password := c.PostForm("PASSWORD")
 	if email != "" && password != "" {
 		if CheckForExistingUser(email, password) {
-			token, err := GenerateAccessToken()
+			token, err := GenerateAccessToken(email, password)
 			if err == nil {
 				c.JSON(http.StatusOK, token)
 			} else {
@@ -122,14 +132,36 @@ func AuthenticateUsers(c *gin.Context) {
 
 //give access only to authorised users which have an access token
 func HomeAccess(c *gin.Context) {
-	token := c.Request.Header.Get("token")
-	sharedKey := []byte{99, 75, 63}
-	payload, _, err := jose.Decode(token, sharedKey)
-	if err == nil {
-		c.String(http.StatusOK, "Access Granted "+payload) //Granting access only to authorised users
-	} else {
-		c.AbortWithStatus(401)
+	clientToken := c.GetHeader("Authorization")
+	if clientToken == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"status": http.StatusUnauthorized, "message": "Authorization Token is required"})
+		c.Abort()
 	}
+	claims := jwt.MapClaims{}
+	extractedToken := strings.Split(clientToken, "Bearer ")
+	if len(extractedToken) == 2 {
+		clientToken = strings.TrimSpace(extractedToken[1])
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Incorrect Format of Authorization Token "})
+		c.Abort()
+	}
+	parsedToken, err := jwt.ParseWithClaims(clientToken, claims, func(token *jwt.Token) (interface{}, error) {
+		return AtJwtKey, nil
+	})
+	if err != nil {
+		if err == jwt.ErrSignatureInvalid {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"status": http.StatusUnauthorized, "message": "Invalid Token Signature"})
+			c.Abort()
+		}
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Bad Request"})
+		c.Abort()
+	}
+
+	if !parsedToken.Valid {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"status": http.StatusUnauthorized, "message": "Invalid Token"})
+		c.Abort()
+	}
+	c.JSON(http.StatusOK, gin.H{"status": http.StatusOK, "message": "Access Granted"})
 }
 
 func main() {
@@ -139,8 +171,12 @@ func main() {
 	db_user, user_exists := os.LookupEnv("DB_USER")
 	db_name, name_exists := os.LookupEnv("DB_NAME")
 	db_password, password_exists := os.LookupEnv("DB_PASSWORD")
+	shared_key, shared_key_exists := os.LookupEnv("SHARED_KEY")
 	var server_port_exists bool
 	server_port, server_port_exists = os.LookupEnv("SERVER_PORT")
+	if shared_key_exists {
+		AtJwtKey = []byte(shared_key)
+	}
 
 	if host_exists && port_exists && user_exists && name_exists && password_exists && server_port_exists {
 		var err error
