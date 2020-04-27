@@ -16,6 +16,7 @@ OAuth 2.0 in GoLang
 - **Columns In DB** - name, email and password
 - **ORM Used** - GORM
 - **HTTP Framework Used** - Gin (gin-gonic/gin)
+- **JWT Library Used** - jwt-go
 
 ## Functions Used {}
 
@@ -35,7 +36,7 @@ OAuth 2.0 in GoLang
 
 - **AddUsers** - Handler for /addUser which posts name, email, password as multipart/form-data. The form detail is stored as a new entry in the database if none of the fields(name, email, password) are empty.
 
-- **AuthenticateUsers** - Handler for /oauth which posts email and password as multipart/form-data. The data is checked against existing entries in database using the email. If an entry exists, the function generates an access token(JWT) using HS256 algorithm. According to this algorithm a shared key is sent along with the access token which is known by both the user and the authenticator.
+- **AuthenticateUsers** - Handler for /oauth which posts email and password as multipart/form-data. The data is checked against existing entries in database using the email. If an entry exists, the function generates an access token(JWT) using HS256 algorithm. According to this algorithm a shared key is sent along with the access token which is known by both the user and the authenticator. For generating and verifying JWTs, [https://github.com/dgrijalva/jwt-go](https://github.com/dgrijalva/jwt-go) was used.
 
 - **HomeAccess** - Handler for /home which is accessible only if the requesting user sends the proper access token as a request header. This token is then decoded and verified using the shared key and the user is granted access if the match is successfull.
 
