@@ -41,9 +41,9 @@ OAuth 2.0 in GoLang
 
 ## Testing </>
 
-- **TestEnterIntoDB** - Tests 'EnterIntoDB' function with a dummy name, email and password. It uses [a link](https://github.com/DATA-DOG/go-sqlmock) (go-sqlmock) for testing database interactions.(creates a fake database server for testing purpose)
+- **TestEnterIntoDB** - Tests 'EnterIntoDB' function with a dummy name, email and password. It uses [github.com/DATA-DOG/go-sqlmock](https://github.com/DATA-DOG/go-sqlmock) (go-sqlmock) for testing database interactions.(creates a fake database server for testing purpose)
 
-- **TestCheckForExistingUser** - Tests 'CheckForExistingUser' function with a dummy email and password. It uses [a link](https://github.com/DATA-DOG/go-sqlmock) (go-sqlmock) for testing database interactions.(creates a fake database server for testing purpose)
+- **TestCheckForExistingUser** - Tests 'CheckForExistingUser' function with a dummy email and password. It uses [github.com/DATA-DOG/go-sqlmock](https://github.com/DATA-DOG/go-sqlmock) (go-sqlmock) for testing database interactions.(creates a fake database server for testing purpose)
 
 - **TestAddUsers** - Tests 'AddUsers' handler by creating a fake HTTP server(Mock Server).
 
