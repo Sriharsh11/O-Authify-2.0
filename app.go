@@ -106,7 +106,7 @@ func AddUsers(c *gin.Context) {
 			c.String(200, "Added new user successfully")
 		}
 	} else {
-		panic("Failed to add user")
+		c.AbortWithStatusJSON(406, gin.H{"status": 406, "message": "Failed to add user"})
 	}
 }
 
@@ -120,13 +120,13 @@ func AuthenticateUsers(c *gin.Context) {
 			if err == nil {
 				c.JSON(http.StatusOK, token)
 			} else {
-				panic(err)
+				c.AbortWithStatusJSON(406, gin.H{"status": 406, "message": err})
 			}
 		} else {
-			panic("user does not exist")
+			c.AbortWithStatusJSON(406, gin.H{"status": 406, "message": "user does not exist"})
 		}
 	} else {
-		panic("fields are empty")
+		c.AbortWithStatusJSON(406, gin.H{"status": 406, "message": "fields are empty"})
 	}
 }
 
@@ -135,15 +135,13 @@ func HomeAccess(c *gin.Context) {
 	clientToken := c.GetHeader("Authorization")
 	if clientToken == "" {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"status": http.StatusUnauthorized, "message": "Authorization Token is required"})
-		c.Abort()
 	}
 	claims := jwt.MapClaims{}
 	extractedToken := strings.Split(clientToken, "Bearer ")
 	if len(extractedToken) == 2 {
 		clientToken = strings.TrimSpace(extractedToken[1])
 	} else {
-		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Incorrect Format of Authorization Token "})
-		c.Abort()
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Incorrect Format of Authorization Token "})
 	}
 	parsedToken, err := jwt.ParseWithClaims(clientToken, claims, func(token *jwt.Token) (interface{}, error) {
 		return AtJwtKey, nil
@@ -151,15 +149,11 @@ func HomeAccess(c *gin.Context) {
 	if err != nil {
 		if err == jwt.ErrSignatureInvalid {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"status": http.StatusUnauthorized, "message": "Invalid Token Signature"})
-			c.Abort()
 		}
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Bad Request"})
-		c.Abort()
 	}
-
 	if !parsedToken.Valid {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"status": http.StatusUnauthorized, "message": "Invalid Token"})
-		c.Abort()
 	}
 	c.JSON(http.StatusOK, gin.H{"status": http.StatusOK, "message": "Access Granted"})
 }
