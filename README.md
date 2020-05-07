@@ -18,7 +18,7 @@ OAuth 2.0 in GoLang
 - **HTTP Framework Used** - Gin (gin-gonic/gin)
 - **JWT Library Used** - jwt-go
 
-## Functions Used {}
+## Functions Used { }
 
 - **init** - Loads environment variables.
 
